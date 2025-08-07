@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mkdocs-quiz"
+version = "0.1.0"
+description = "MkDocs Quiz Plugin for creating interactive quizzes in documentation."
+authors = [
+    { name = "Maciel Vidal" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "mkdocs>=1.4.0",
+    "markdown>=3.3.0",
+    "pymdown-extensions>=9.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/macielcalebe/mkdocs-quiz"
+Repository = "https://github.com/macielcalebe/mkdocs-quiz"
+"Bug Tracker" = "https://github.com/macielcalebe/mkdocs-quiz/issues"
+Documentation = "https://github.com/macielcalebe/mkdocs-quiz"
+
+[project.entry-points."mkdocs.plugins"]
+mkdocs_quiz = "src.plugin:QuizPlugin"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src"]
+
+[tool.setuptools.package-data]
+mkdocs_quiz = ["static/*.css", "static/*.js"]

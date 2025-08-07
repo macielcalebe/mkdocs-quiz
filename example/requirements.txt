@@ -1,0 +1,11 @@
+# Core dependencies
+mkdocs>=1.4.0
+mkdocs-material>=9.0.0
+
+# Required for quiz functionality
+git+https://github.com/macielcalebe/mkdocs-quiz.git
+markdown>=3.3.0
+pymdown-extensions>=9.0.0
+
+# Additional useful extensions
+mkdocs-awesome-pages-plugin>=2.8.0
