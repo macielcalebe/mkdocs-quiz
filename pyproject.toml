@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-quiz"
-version = "0.1.0"
+version = "0.1.1"
 description = "MkDocs Quiz Plugin for creating interactive quizzes in documentation."
 authors = [
     { name = "Maciel Vidal" }
@@ -32,7 +32,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src"]
+include = ["src*"]
 
 [tool.setuptools.package-data]
-mkdocs_quiz = ["static/*.css", "static/*.js"]
+src = ["static/*.css", "static/*.js"]
