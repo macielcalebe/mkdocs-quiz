@@ -3,6 +3,8 @@ from mkdocs.plugins import BasePlugin
 from mkdocs.config import base
 from mkdocs.config import config_options as c
 import logging
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class ExerciseAdmonition:
         title = el.find('p[@class="admonition-title"]')
         answer = el.find('.//div[@class="admonition answer"]')
 
-        if answer:
+        if answer is not None:
             answer_title = answer.find('p[@class="admonition-title"]')
             if answer_title is not None:
                 answer_title.text = _("Answer")
@@ -75,7 +77,7 @@ class ExerciseAdmonition:
 
         # Handle answer block
         answer = el.find('.//div[@class="admonition answer"]')
-        if answer:
+        if answer is not None:
             el.remove(answer)
             answer.attrib["class"] += " quiz-answer no-indent"
             el.append(answer)
@@ -167,7 +169,7 @@ class ChoiceExercise(ExerciseAdmonition):
         choices = submission_form.findall(".//ul/li")
 
         # Also check for task-list class specifically
-        if not choice_list:
+        if choice_list is None:
             choice_list = submission_form.find(".//ul[@class='task-list']")
             choices = submission_form.findall(".//ul[@class='task-list']/li")
 
@@ -367,8 +369,6 @@ class SelfProgressExercise(ExerciseAdmonition):
 
 
 # Markdown Extension Classes
-from markdown.extensions import Extension
-from markdown.treeprocessors import Treeprocessor
 
 
 class QuizExtension(Extension):

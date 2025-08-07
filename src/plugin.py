@@ -70,7 +70,7 @@ class QuizPlugin(BasePlugin[QuizPluginConfig]):
         if "mdx_configs" not in config:
             config["mdx_configs"] = {}
 
-        extension_name = "mkdocs_quiz.extension:QuizExtension"
+        extension_name = "src.extension:QuizExtension"
         config["mdx_configs"].setdefault(extension_name, {})
         config["mdx_configs"][extension_name]["page"] = page
         config["mdx_configs"][extension_name]["mkdocs_config"] = config
