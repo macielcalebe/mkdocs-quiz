@@ -1,6 +1,15 @@
 // Sistema de processamento de exercícios de múltipla escolha
 function processChoiceExercises() {
   document.querySelectorAll('.admonition.exercise.choice').forEach(function(exerciseContainer, index) {
+    // Skip if already processed
+    if (exerciseContainer.hasAttribute('data-choice-processed')) {
+      console.log(`Choice exercise ${exerciseContainer.id || index + 1} already processed, skipping`);
+      return;
+    }
+    
+    // Mark as processed
+    exerciseContainer.setAttribute('data-choice-processed', 'true');
+    
     // Always process choice exercises with JavaScript to ensure functionality
     const exerciseId = `exercise_choice_${index + 1}`;
     exerciseContainer.id = exerciseId;
@@ -150,6 +159,15 @@ function attachChoiceEventHandlers(exerciseContainer, form) {
 function processTextExercises() {
   // Process text short exercises
   document.querySelectorAll('.admonition.exercise.text.short').forEach(function(exerciseContainer, index) {
+    // Skip if already processed
+    if (exerciseContainer.hasAttribute('data-text-processed')) {
+      console.log(`Text short exercise ${exerciseContainer.id || index + 1} already processed, skipping`);
+      return;
+    }
+    
+    // Mark as processed
+    exerciseContainer.setAttribute('data-text-processed', 'true');
+    
     // Check if form already exists (created by Python plugin)
     if (exerciseContainer.querySelector('.quiz-form')) {
       console.log(`Text short exercise ${index + 1} already has a form, skipping JavaScript creation`);
@@ -190,6 +208,15 @@ function processTextExercises() {
   
   // Process text long exercises
   document.querySelectorAll('.admonition.exercise.text.long').forEach(function(exerciseContainer, index) {
+    // Skip if already processed
+    if (exerciseContainer.hasAttribute('data-text-processed')) {
+      console.log(`Text long exercise ${exerciseContainer.id || index + 1} already processed, skipping`);
+      return;
+    }
+    
+    // Mark as processed
+    exerciseContainer.setAttribute('data-text-processed', 'true');
+    
     // Check if form already exists (created by Python plugin)
     if (exerciseContainer.querySelector('.quiz-form')) {
       console.log(`Text long exercise ${index + 1} already has a form, skipping JavaScript creation`);
@@ -229,7 +256,7 @@ function processTextExercises() {
 }
 
 // Sistema de armazenamento adaptativo com fallback
-const storage = {
+const quizStorage = {
   data: {},
   available: false,
   
@@ -302,7 +329,7 @@ function debugBrowserInfo() {
   console.log('Browser supports Storage:', typeof(Storage) !== "undefined");
   console.log('Current origin:', window.location.origin);
   console.log('Current protocol:', window.location.protocol);
-  console.log('localStorage available:', storage.available);
+  console.log('localStorage available:', quizStorage.available);
   console.log('==================');
 }
 
@@ -312,7 +339,13 @@ function addExerciseNumbering() {
   let exerciseCounter = 0;
   
   exercises.forEach(function(exercise) {
+    // Skip if already numbered
+    if (exercise.hasAttribute('data-numbered')) {
+      return;
+    }
+    
     exerciseCounter++;
+    exercise.setAttribute('data-numbered', 'true');
     const titleElement = exercise.querySelector('.admonition-title');
     
     if (titleElement) {
@@ -338,7 +371,12 @@ function addExerciseNumbering() {
 
 // Function to clean up invalid stored states
 function cleanupInvalidStates() {
-  if (!storage.available) return;
+  if (!quizStorage.available) return;
+  
+  console.log('CLEANUP FUNCTION DISABLED - Text exercise persistence debugging in progress');
+  // Completely disable cleanup until we fix the logic that incorrectly removes valid text exercise states
+  // When re-enabled, it should handle page-specific keys (format: "path::exercise_id")
+  return;
   
   console.log('Cleaning up invalid stored states...');
   const keysToRemove = [];
@@ -351,11 +389,31 @@ function cleanupInvalidStates() {
         const value = localStorage.getItem(key);
         const state = JSON.parse(value);
         
-        // Check if the state has null selectedAnswer for choice exercises
-        if (state.submitted && state.selectedAnswer === null) {
-          console.log(`Found invalid state for ${key}:`, state);
+        // Only remove states that are truly invalid:
+        // 1. States with invalid structure
+        // 2. States that are supposedly submitted but have no answer data at all
+        if (typeof state !== 'object' || state === null) {
+          console.log(`Found invalid state structure for ${key}:`, state);
           keysToRemove.push(key);
+        } else if (state.submitted && 
+                   state.selectedAnswer === null && 
+                   (!state.answerText || state.answerText.trim() === '')) {
+          // Only remove if it's supposedly submitted but has no answer data at all
+          // This means BOTH selectedAnswer is null AND answerText is empty/null
+          console.log(`Found incomplete submitted state for ${key}:`);
+          console.log(`  - submitted: ${state.submitted}`);
+          console.log(`  - selectedAnswer: ${state.selectedAnswer}`);
+          console.log(`  - answerText: "${state.answerText}"`);
+          console.log(`  - answerText.trim(): "${state.answerText?.trim()}"`);
+          console.log(`  - answerText is falsy: ${!state.answerText}`);
+          console.log(`  - answerText.trim() is empty: ${state.answerText?.trim() === ''}`);
+          keysToRemove.push(key);
+        } else {
+          // This is a valid state, don't remove it
+          console.log(`Valid state preserved for ${key}:`, state);
         }
+        // Note: Text exercises can have selectedAnswer: null but valid answerText
+        // Choice exercises should have valid selectedAnswer
       } catch (e) {
         // Invalid JSON, mark for removal
         console.log(`Found corrupted state for ${key}, marking for removal`);
@@ -375,7 +433,10 @@ function cleanupInvalidStates() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", function () {
+// Main initialization function that can be called multiple times
+function initializeQuizzes() {
+  console.log('Initializing quizzes...');
+  
   // Process exercises first
   processChoiceExercises();
   processTextExercises();
@@ -383,12 +444,13 @@ document.addEventListener("DOMContentLoaded", function () {
   // Add exercise numbering (JavaScript fallback for CSS counters)
   addExerciseNumbering();
   
-  // Inicializa o sistema de armazenamento
-  storage.init();
-  debugBrowserInfo();
-  
-  // Clean up any invalid stored states
-  cleanupInvalidStates();
+  // Only initialize storage once
+  if (!quizStorage.hasOwnProperty('initialized')) {
+    quizStorage.init();
+    debugBrowserInfo();
+    cleanupInvalidStates();
+    quizStorage.initialized = true;
+  }
   
   document.querySelectorAll("form.quiz-form").forEach(function (form) {
     const exerciseContainer = form.closest(".admonition.exercise");
@@ -408,19 +470,71 @@ document.addEventListener("DOMContentLoaded", function () {
     let exerciseId = exerciseContainer.id;
     const titleElement = exerciseContainer.querySelector(".admonition-title");
     
-    // Ensure exercise has an ID, especially for choice exercises
+    // Ensure exercise has a unique ID
     if (!exerciseId) {
-      if (exerciseContainer.classList.contains("choice")) {
-        const choiceIndex = Array.from(document.querySelectorAll('.admonition.exercise.choice')).indexOf(exerciseContainer) + 1;
-        exerciseId = `exercise_choice_${choiceIndex}`;
-      } else if (exerciseContainer.classList.contains("exercise-short") || exerciseContainer.classList.contains("exercise-text")) {
-        const textIndex = Array.from(document.querySelectorAll('.admonition.exercise.exercise-short, .admonition.exercise.exercise-text')).indexOf(exerciseContainer) + 1;
-        exerciseId = `exercise_text_${textIndex}`;
+      // Generate a unique ID based on exercise position and detected type
+      const allExercises = Array.from(document.querySelectorAll('.admonition.exercise'));
+      const exerciseIndex = allExercises.indexOf(exerciseContainer) + 1;
+      
+      // Detect exercise type by form content to generate appropriate ID
+      const form = exerciseContainer.querySelector('.quiz-form');
+      if (form) {
+        const textInputs = form.querySelectorAll('input[name="data"]:not([type="hidden"])');
+        const textareaInputs = form.querySelectorAll('textarea[name="data"]');
+        const hiddenInputs = form.querySelectorAll('input[type="hidden"][name="data"]');
+        const alternatives = form.querySelectorAll('.quiz-alternative');
+        
+        // Determine type by form content
+        if (alternatives.length > 0 || (textInputs.length > 1 && hiddenInputs.length === 0)) {
+          // Choice exercise
+          const choiceIndex = Array.from(document.querySelectorAll('.admonition.exercise')).filter(ex => {
+            const exForm = ex.querySelector('.quiz-form');
+            return exForm && (exForm.querySelectorAll('.quiz-alternative').length > 0 || 
+                             exForm.querySelectorAll('input[name="data"]:not([type="hidden"])').length > 1);
+          }).indexOf(exerciseContainer) + 1;
+          exerciseId = `exercise_choice_${choiceIndex}`;
+        } else if (textareaInputs.length > 0 || (textInputs.length === 1 && hiddenInputs.length === 0)) {
+          // Text exercise
+          const textIndex = Array.from(document.querySelectorAll('.admonition.exercise')).filter(ex => {
+            const exForm = ex.querySelector('.quiz-form');
+            if (!exForm) return false;
+            const exTextInputs = exForm.querySelectorAll('input[name="data"]:not([type="hidden"])');
+            const exTextareaInputs = exForm.querySelectorAll('textarea[name="data"]');
+            const exHiddenInputs = exForm.querySelectorAll('input[type="hidden"][name="data"]');
+            return exTextareaInputs.length > 0 || (exTextInputs.length === 1 && exHiddenInputs.length === 0);
+          }).indexOf(exerciseContainer) + 1;
+          exerciseId = `exercise_text_${textIndex}`;
+        } else if (hiddenInputs.length > 0) {
+          // Self-progress exercise
+          const selfIndex = Array.from(document.querySelectorAll('.admonition.exercise')).filter(ex => {
+            const exForm = ex.querySelector('.quiz-form');
+            return exForm && exForm.querySelectorAll('input[type="hidden"][name="data"]').length > 0;
+          }).indexOf(exerciseContainer) + 1;
+          exerciseId = `exercise_self_${selfIndex}`;
+        } else {
+          // Fallback
+          exerciseId = `exercise_unknown_${exerciseIndex}`;
+        }
       } else {
-        const allIndex = Array.from(document.querySelectorAll('.admonition.exercise')).indexOf(exerciseContainer) + 1;
-        exerciseId = `exercise_${allIndex}`;
+        // No form found, use fallback
+        exerciseId = `exercise_noform_${exerciseIndex}`;
       }
+      
       exerciseContainer.id = exerciseId;
+      console.log(`Generated unique ID for exercise: ${exerciseId}`);
+    } else {
+      // Check for duplicate IDs and make them unique if needed
+      const existingElements = document.querySelectorAll(`[id="${exerciseId}"]`);
+      if (existingElements.length > 1) {
+        // There are duplicates, make this one unique
+        const allExercises = Array.from(document.querySelectorAll('.admonition.exercise'));
+        const exerciseIndex = allExercises.indexOf(exerciseContainer) + 1;
+        const originalId = exerciseId;
+        exerciseId = `${originalId}_duplicate_${exerciseIndex}`;
+        
+        console.log(`Duplicate ID detected: ${originalId}, changed to: ${exerciseId}`);
+        exerciseContainer.id = exerciseId;
+      }
     }
     
     console.log(`Processing exercise: ${exerciseId}`);
@@ -483,23 +597,29 @@ document.addEventListener("DOMContentLoaded", function () {
     disableForm();
     console.log("Initial disableForm() called.");
     
+    // Make exercise ID page-specific to avoid conflicts between pages
+    const pageKey = window.location.pathname || window.location.href;
+    const pageSpecificExerciseId = `${pageKey}::${exerciseId}`;
+    
     // Load saved state from storage
     let savedState = null;
-    const savedStateRaw = storage.getItem(exerciseId);
+    const savedStateRaw = quizStorage.getItem(pageSpecificExerciseId);
+    
+    console.log(`Checking saved state for ${pageSpecificExerciseId}: ${savedStateRaw}`);
     
     if (savedStateRaw) {
       try {
         savedState = JSON.parse(savedStateRaw);
-        console.log(`Loaded state for ${exerciseId}:`, savedState);
+        console.log(`Loaded state for ${pageSpecificExerciseId}:`, savedState);
         console.log(`answerText in loaded state: ${savedState.answerText}`);
       } catch(e) {
-        console.error(`Error parsing saved state for ${exerciseId}:`, e);
+        console.error(`Error parsing saved state for ${pageSpecificExerciseId}:`, e);
         // Remove estado corrompido
-        storage.removeItem(exerciseId);
+        quizStorage.removeItem(pageSpecificExerciseId);
       }
-    }
-    
-    if (savedState) {
+      } else {
+        console.log(`No saved state found for ${pageSpecificExerciseId}`);
+      }    if (savedState) {
       if (savedState.submitted) {
         // Restore submitted state
         disableForm();
@@ -543,10 +663,10 @@ document.addEventListener("DOMContentLoaded", function () {
               console.log(`No hidden input found for alternative ${selectedAnswerIndex}`);
             }
           } else {
-            console.log(`Invalid selectedAnswerIndex for ${exerciseId}: ${selectedAnswerIndex} (alternatives: ${alternatives.length})`);
+            console.log(`Invalid selectedAnswerIndex for ${pageSpecificExerciseId}: ${selectedAnswerIndex} (alternatives: ${alternatives.length})`);
             // Clear invalid state
-            console.log(`Clearing invalid state for ${exerciseId}`);
-            storage.removeItem(exerciseId);
+            console.log(`Clearing invalid state for ${pageSpecificExerciseId}`);
+            quizStorage.removeItem(pageSpecificExerciseId);
             // Re-enable the form since the saved state was invalid
             enableForm();
             if (answerBlock) {
@@ -554,25 +674,41 @@ document.addEventListener("DOMContentLoaded", function () {
             }
           }
           
-        } else if (exerciseContainer.classList.contains("exercise-short") || 
-                   exerciseContainer.classList.contains("exercise-long") || 
-                   exerciseContainer.classList.contains("exercise-text") ||
-                   (exerciseContainer.classList.contains("exercise") && exerciseContainer.classList.contains("text"))) {
-          const inputField = form.querySelector(".quiz-text-input");
-          if (inputField && savedState.answerText !== undefined) {
-            inputField.value = savedState.answerText;
-            console.log(`Restored text input for ${exerciseId}: ${inputField.value}`);
+        } else {
+          // Check for text exercises by form content, not CSS classes
+          const textInputs = form.querySelectorAll('input[name="data"]:not([type="hidden"])');
+          const textareaInputs = form.querySelectorAll('textarea[name="data"]');
+          const hiddenInputs = form.querySelectorAll('input[type="hidden"][name="data"]');
+          
+          // Text exercises have textarea or single text input (not hidden)
+          const isTextExercise = textareaInputs.length > 0 || (textInputs.length === 1 && hiddenInputs.length === 0);
+          
+          if (isTextExercise) {
+            const inputField = textareaInputs[0] || textInputs[0];
+            console.log(`Detected text exercise ${exerciseId} by form content - textarea: ${textareaInputs.length}, textInputs: ${textInputs.length}, hidden: ${hiddenInputs.length}`);
+            
+            if (inputField && savedState.answerText !== undefined) {
+              inputField.value = savedState.answerText;
+              console.log(`Restored text input for ${exerciseId}: ${inputField.value}`);
+            } else {
+              console.log(`Input field not found or no answerText for ${exerciseId} during restore.`);
+            }
           } else {
-            console.log(`Input field not found or no answerText for ${exerciseId} during restore.`);
+            console.log(`Not a recognized exercise type for ${exerciseId} - inputs: ${textInputs.length}, textarea: ${textareaInputs.length}, hidden: ${hiddenInputs.length}`);
           }
         }
       } else {
         // If not submitted, restore partial state but DON'T show answer
-        if (exerciseContainer.classList.contains("exercise-short") || 
-            exerciseContainer.classList.contains("exercise-long") || 
-            exerciseContainer.classList.contains("exercise-text") ||
-            (exerciseContainer.classList.contains("exercise") && exerciseContainer.classList.contains("text"))) {
-          const inputField = form.querySelector(".quiz-text-input");
+        // Check for text exercises by form content, not CSS classes
+        const textInputs = form.querySelectorAll('input[name="data"]:not([type="hidden"])');
+        const textareaInputs = form.querySelectorAll('textarea[name="data"]');
+        const hiddenInputs = form.querySelectorAll('input[type="hidden"][name="data"]');
+        
+        // Text exercises have textarea or single text input (not hidden)
+        const isTextExercise = textareaInputs.length > 0 || (textInputs.length === 1 && hiddenInputs.length === 0);
+        
+        if (isTextExercise) {
+          const inputField = textareaInputs[0] || textInputs[0];
           if (inputField && savedState.answerText !== undefined) {
             inputField.value = savedState.answerText;
             console.log(`Restored unsaved text input for ${exerciseId}: ${inputField.value}`);
@@ -643,13 +779,19 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     
     // Auto-save text input (with debounce) - only for text exercises
-    if (exerciseContainer.classList.contains("exercise-short") || 
-        exerciseContainer.classList.contains("exercise-long") || 
-        exerciseContainer.classList.contains("exercise-text") ||
-        (exerciseContainer.classList.contains("exercise") && exerciseContainer.classList.contains("text"))) {
-      const inputField = form.querySelector(".quiz-text-input");
+    // Detect text exercises by form content, not CSS classes
+    const textInputs = form.querySelectorAll('input[name="data"]:not([type="hidden"])');
+    const textareaInputs = form.querySelectorAll('textarea[name="data"]');
+    const hiddenInputs = form.querySelectorAll('input[type="hidden"][name="data"]');
+    
+    // Text exercises have textarea or single text input (not hidden)
+    const isTextExercise = textareaInputs.length > 0 || (textInputs.length === 1 && hiddenInputs.length === 0);
+    
+    if (isTextExercise) {
+      const inputField = textareaInputs[0] || textInputs[0];
       if (inputField) {
         let saveTimeout;
+        console.log(`Auto-save enabled for text exercise ${exerciseId}`);
         
         inputField.addEventListener("input", function() {
           // Clear previous timeout
@@ -657,14 +799,14 @@ document.addEventListener("DOMContentLoaded", function () {
           
           // Set new timeout for auto-save
           saveTimeout = setTimeout(() => {
-            const currentState = storage.getItem(exerciseId);
+            const currentState = quizStorage.getItem(pageSpecificExerciseId);
             let state = currentState ? JSON.parse(currentState) : {};
             
             state.answerText = inputField.value;
             // Don't mark as submitted for auto-save
             
-            const success = storage.setItem(exerciseId, JSON.stringify(state));
-            console.log(`Auto-saved text input for ${exerciseId}: ${inputField.value} (success: ${success})`);
+            const success = quizStorage.setItem(pageSpecificExerciseId, JSON.stringify(state));
+            console.log(`Auto-saved text input for ${pageSpecificExerciseId}: ${inputField.value} (success: ${success})`);
           }, 500); // Save after 500ms of no typing
         });
       }
@@ -716,25 +858,32 @@ document.addEventListener("DOMContentLoaded", function () {
           alternatives[correctAnswerIndex].classList.add("correct");
         }
         
-      } else if (exerciseContainer.classList.contains("exercise-short") || 
-                 exerciseContainer.classList.contains("exercise-long") || 
-                 exerciseContainer.classList.contains("exercise-text") ||
-                 (exerciseContainer.classList.contains("exercise") && exerciseContainer.classList.contains("text"))) {
-        console.log("Processing text exercise submission.");
-        const inputField = form.querySelector(".quiz-text-input");
-        if (inputField) {
-          console.log("Input field found:", inputField);
-          console.log("Input field value before saving:", inputField.value);
-          answerText = inputField.value.trim();
-          console.log(`Saving text input for ${exerciseId}: ${answerText}`);
-        } else {
-          console.log(`Input field not found for ${exerciseId} during save.`);
-        }
+      } else {
+        // Check for text exercises by form content, not CSS classes
+        const textInputs = form.querySelectorAll('input[name="data"]:not([type="hidden"])');
+        const textareaInputs = form.querySelectorAll('textarea[name="data"]');
+        const hiddenInputs = form.querySelectorAll('input[type="hidden"][name="data"]');
         
-      } else if (exerciseContainer.classList.contains("exercise-self-progress") || 
-                 exerciseContainer.classList.contains("exercise")) {
-        console.log("Processing self-progress exercise submission.");
-        // For self-progress exercises, just mark as submitted
+        // Text exercises have textarea or single text input (not hidden)
+        const isTextExercise = textareaInputs.length > 0 || (textInputs.length === 1 && hiddenInputs.length === 0);
+        
+        if (isTextExercise) {
+          console.log("Processing text exercise submission (detected by form content).");
+          const inputField = textareaInputs[0] || textInputs[0];
+          if (inputField) {
+            console.log("Input field found:", inputField);
+            console.log("Input field value before saving:", inputField.value);
+            answerText = inputField.value.trim();
+            console.log(`Saving text input for ${exerciseId}: ${answerText}`);
+          } else {
+            console.log(`Input field not found for ${exerciseId} during save.`);
+          }
+        } else if (hiddenInputs.length > 0) {
+          console.log("Processing self-progress exercise submission (detected by form content).");
+          // For self-progress exercises, just mark as submitted
+        } else {
+          console.log(`Unknown exercise type for ${exerciseId} - inputs: ${textInputs.length}, textarea: ${textareaInputs.length}, hidden: ${hiddenInputs.length}`);
+        }
       }
       
       // Show answer block only after submission
@@ -755,7 +904,7 @@ document.addEventListener("DOMContentLoaded", function () {
         timestamp: Date.now()
       };
       
-      const success = storage.setItem(exerciseId, JSON.stringify(stateData));
+      const success = quizStorage.setItem(pageSpecificExerciseId, JSON.stringify(stateData));
       console.log(`State saved to storage (success: ${success}):`, stateData);
     });
     
@@ -766,7 +915,7 @@ document.addEventListener("DOMContentLoaded", function () {
       console.log("Edit button clicked.");
       
       // Get current saved state to restore the last submitted answer
-      const currentSavedState = storage.getItem(exerciseId);
+      const currentSavedState = quizStorage.getItem(pageSpecificExerciseId);
       let lastSubmittedState = null;
       
       if (currentSavedState) {
@@ -832,7 +981,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Update the saved state to mark as editing (but keep the answer data)
       if (lastSubmittedState) {
         lastSubmittedState.submitted = false; // Mark as not submitted anymore
-        const success = storage.setItem(exerciseId, JSON.stringify(lastSubmittedState));
+        const success = quizStorage.setItem(pageSpecificExerciseId, JSON.stringify(lastSubmittedState));
         console.log("Updated state to editing mode, preserved answer data");
       }
     });
@@ -841,8 +990,71 @@ document.addEventListener("DOMContentLoaded", function () {
   // Log final storage state for debugging
   setTimeout(() => {
     console.log('Final storage state:', {
-      available: storage.available,
-      memoryData: storage.data
+      available: quizStorage.available,
+      memoryData: quizStorage.data
     });
   }, 1000);
+}
+
+// Event listeners for both regular page loads and AJAX navigation
+document.addEventListener("DOMContentLoaded", function () {
+  console.log('DOMContentLoaded event fired');
+  initializeQuizzes();
+});
+
+// Simple and robust approach: Check for content changes every 500ms
+let lastPageUrl = window.location.href;
+let lastExerciseCount = 0;
+
+setInterval(function() {
+  const currentUrl = window.location.href;
+  const currentExercises = document.querySelectorAll('.admonition.exercise');
+  const currentCount = currentExercises.length;
+  
+  // Check if URL changed (AJAX navigation) or exercise count changed
+  if (currentUrl !== lastPageUrl || currentCount !== lastExerciseCount) {
+    console.log(`Page change detected: URL changed from ${lastPageUrl} to ${currentUrl}`);
+    console.log(`Exercise count changed from ${lastExerciseCount} to ${currentCount}`);
+    
+    lastPageUrl = currentUrl;
+    lastExerciseCount = currentCount;
+    
+    if (currentCount > 0) {
+      console.log('Exercises found after navigation, triggering initialization');
+      initializeQuizzes();
+    }
+  }
+}, 500); // Check every 500ms
+
+// Backup: Also try the standard MkDocs events
+const mkdocsEvents = [
+  'DOMContentSwapped',
+  'instant:render', 
+  'instant:loaded',
+  'page:load'
+];
+
+mkdocsEvents.forEach(eventName => {
+  document.addEventListener(eventName, function () {
+    console.log(`${eventName} event fired (AJAX navigation)`);
+    setTimeout(initializeQuizzes, 100);
+  });
+});
+
+// Also try intercepting link clicks directly
+document.addEventListener('click', function(e) {
+  if (e.target.tagName === 'A' || e.target.closest('a')) {
+    const link = e.target.tagName === 'A' ? e.target : e.target.closest('a');
+    console.log('Link clicked:', link.href);
+    
+    // Check for content after a delay
+    setTimeout(() => {
+      const exercises = document.querySelectorAll('.admonition.exercise');
+      console.log(`Found ${exercises.length} exercises after link click`);
+      if (exercises.length > 0) {
+        console.log('Exercises found after link click, triggering initialization');
+        initializeQuizzes();
+      }
+    }, 300);
+  }
 });
